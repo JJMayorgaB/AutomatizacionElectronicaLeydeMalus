@@ -1,0 +1,10 @@
+RESULTADOS DEL AJUSTE
+==================================================
+Función ajustada: I = A * cos²(θ - θ₀)
+
+Parámetros:
+  A (Amplitud)    = 95.81 ± 4.52 lux
+  θ₀ (Desfase)    = 325.45 ± 2.34°
+  θ₀ (radianes)   = 5.6802 ± 0.0408 rad
+
+R² = -14.7456
