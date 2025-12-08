@@ -34,16 +34,13 @@ AutomatizaciónElectronicaLeydeMalus/
 ├── analisis.py                  # Script principal de análisis en Python
 │
 ├── boton/
-│   └── boton.ino               # Control básico con botón para debbuging
+│   └── boton.ino               # Control básico con botón para debugging
 │
 ├── lux/
-│   └── lux.ino                 # Diagnóstico y prueba del sensor BH1750 para debbuging
+│   └── lux.ino                 # Diagnóstico y prueba del sensor BH1750 para debugging
 │
 ├── motor/
 │   └── motor.ino               # Control del motor con medición de luz
-│
-├── motor_avanzado/
-│   └── motor_avanzado.ino      # Control avanzado del motor
 │
 ├── prueba/
 │   └── prueba.ino              # Código de prueba general para diagnóstico del motor
@@ -51,6 +48,8 @@ AutomatizaciónElectronicaLeydeMalus/
 └── resultados/
     ├── lux_data.csv            # Datos experimentales (ángulo vs lux)
     └── resultados_ajuste.txt   # Parámetros del ajuste y estadísticas
+│    
+└── README.md                    # Este archivo
 ```
 
 ## 🚀 Instalación y Uso
