@@ -2,23 +2,33 @@
 #include <Wire.h>
 #include <BH1750.h>
 
-// pines
+// Pines del motor
 #define STEP_PIN 2
 #define DIR_PIN 3
+
+// Pines de los botones
+#define BTN_RAPIDO 11      // Barrido rápido (36 puntos)
+#define BTN_EXHAUSTIVO 12 // Medición exhaustiva (cada grado)
+#define BTN_ALINEAR 13     // Retornar a posición inicial (0°)
 
 AccelStepper stepper(AccelStepper::DRIVER, STEP_PIN, DIR_PIN);
 BH1750 lightMeter;
 
 const int stepsPerRevolution = 200 * 32; // 200 pasos/revolución * 32 micropasos
-const int stepSize = 5; // Tamaño del paso en grados
-bool medicionCompleta = false; // Bandera para controlar una sola medición
+
+// Variables de estado
+bool modoActivo = false;
+unsigned long lastDebounceTime = 0;
+const unsigned long debounceDelay = 50;
 
 void setup() {
     Serial.begin(9600);
 
+    // Configurar motor
     stepper.setMaxSpeed(1000);
     stepper.setAcceleration(10000);
 
+    // Configurar sensor de luz
     Wire.begin();
     
     //CONTINUOUS_HIGH_RES_MODE Rango max: 55k lux, res: 1 lux
@@ -30,57 +40,107 @@ void setup() {
         while(1);
     }
 
-    delay(5000); // Dar tiempo para que Python se conecte
+    // Configurar botones con pull-up interno
+    pinMode(BTN_RAPIDO, INPUT_PULLUP);
+    pinMode(BTN_EXHAUSTIVO, INPUT_PULLUP);
+    pinMode(BTN_ALINEAR, INPUT_PULLUP);
+
+    Serial.println("Sistema iniciado. Presione un botón para comenzar:");
+    Serial.println("- Botón pin 7: Barrido rápido (36 puntos)");
+    Serial.println("- Botón pin 8: Medición exhaustiva (cada grado)");
+    Serial.println("- Botón pin 9: Retornar a posición inicial (0°)");
+    
+    delay(5000);
 }
 
 void loop() {
-    if (!medicionCompleta) {
-        for (int angle = 0; angle <= 360; angle += stepSize){
-            moveToAngle(angle);
-            delay(1000); // Esperar a que el motor se estabilice
-            measureIntensity();
-            delay(100);
+    // Verificar botones (activos en LOW por pull-up)
+    if (digitalRead(BTN_RAPIDO) == LOW && !modoActivo) {
+        delay(debounceDelay);
+        if (digitalRead(BTN_RAPIDO) == LOW) {
+            Serial.println("\n=== MODO: Barrido Rápido ===");
+            barridoRapido();
+            esperarLiberacion(BTN_RAPIDO);
         }
-        moveToAngle(0); // Volver a la posición inicial en 0 grados
-        medicionCompleta = true; // Marcar como completado
-        Serial.println("FIN"); // Indicar que terminó
     }
-    // No hacer nada más - el motor queda detenido en 0°
+    
+    if (digitalRead(BTN_EXHAUSTIVO) == LOW && !modoActivo) {
+        delay(debounceDelay);
+        if (digitalRead(BTN_EXHAUSTIVO) == LOW) {
+            Serial.println("\n=== MODO: Medición Exhaustiva ===");
+            medicionExhaustiva();
+            esperarLiberacion(BTN_EXHAUSTIVO);
+        }
+    }
+    
+    if (digitalRead(BTN_ALINEAR) == LOW && !modoActivo) {
+        delay(debounceDelay);
+        if (digitalRead(BTN_ALINEAR) == LOW) {
+            Serial.println("\n=== Retornando a posición inicial (0°) ===");
+            moveToAngle(0);
+            Serial.println("Motor en posición inicial.\n");
+            esperarLiberacion(BTN_ALINEAR);
+        }
+    }
 }
 
-// Función para colocar el motor en un ángulo específico
+// Modo 1: Barrido rápido con 36 puntos (cada 10 grados)
+void barridoRapido() {
+    modoActivo = true;
+
+    Serial.println("Angulo,Intensidad(lux)"); // Cambiar ; por , para consistencia
+    
+    for (int angle = 0; angle <= 360; angle += 15) {
+        moveToAngle(angle);
+        delay(1000);
+        measureIntensity();
+        delay(100);
+    }
+    
+    Serial.println("FIN"); // Agregar señal de finalización
+
+    modoActivo = false;
+}
+
+// Modo 2: Medición exhaustiva cada grado
+void medicionExhaustiva() {
+    modoActivo = true;
+
+    Serial.println("Angulo,Intensidad(lux)");
+    
+    for (int angle = 0; angle <= 360; angle += 2) {
+        moveToAngle(angle);
+        delay(500);
+        measureIntensity();
+        delay(50);
+    }
+    
+    Serial.println("FIN"); // Agregar señal de finalización
+
+    modoActivo = false;
+}
+
+// Función para mover el motor a un ángulo específico
 void moveToAngle(int angle) {
     long targetPosition = map(angle, 0, 360, 0, stepsPerRevolution);
     stepper.moveTo(targetPosition);
     stepper.runToPosition();
-    
-    // DEBUG: Verificar posición después del movimiento
-    // Serial.print("DEBUG - Target:");
-    // Serial.print(targetPosition);
-    // Serial.print(" Current:");
-    // Serial.println(stepper.currentPosition());
 }
 
-// Función para medir la intensidad de luz y enviar los datos por serial
+// Función para medir intensidad y enviar datos por serial
 void measureIntensity() {
     float lux = lightMeter.readLightLevel();
-    long currentPos = stepper.currentPosition();
-    int currentAngle = map(currentPos, 0, stepsPerRevolution, 0, 360);
-
-    //Redondear currentAngle al múltiplo más cercano a 5°
-    int roundedAngle = round(currentAngle / 5.0) * 5;
-
-    // DEBUG: Ver valores intermedios (DESCOMENTAR PARA PROBAR)
-    // Serial.print("Pos:");
-    // Serial.print(currentPos);
-    // Serial.print(" RawAngle:");
-    // Serial.print(currentAngle);
-    // Serial.print(" Rounded:");
-    // Serial.print(roundedAngle);
-    // Serial.print(" -> ");
-
-    // Enviar los datos obtenidos por serial
-    Serial.print(roundedAngle); 
+    int currentAngle = map(stepper.currentPosition(), 0, stepsPerRevolution, 0, 360);
+    
+    Serial.print(currentAngle);
     Serial.print(",");
     Serial.println(lux);
+}
+
+// Función para esperar a que se libere el botón
+void esperarLiberacion(int pinBoton) {
+    while (digitalRead(pinBoton) == LOW) {
+        delay(10);
+    }
+    delay(debounceDelay);
 }
